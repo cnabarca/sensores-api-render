@@ -510,6 +510,13 @@ const percentil = (arr, p) => {
   const a = [...arr].sort((x, y) => x - y), i = (a.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
   return a[lo] + (a[hi] - a[lo]) * (i - lo);
 };
+// El servidor registra en UTC (buena práctica); el panel muestra la hora local del navegador (Ecuador: UTC−5).
+const ZONA_LOCAL = (() => {
+  const min = -new Date().getTimezoneOffset(), s = min >= 0 ? "+" : "−", h = Math.floor(Math.abs(min) / 60), m = Math.abs(min) % 60;
+  return `UTC${s}${h}${m ? `:${String(m).padStart(2, "0")}` : ""}`;
+})();
+const horaLocal = (iso) => (iso ? new Date(iso).toLocaleTimeString("es-EC", { hour12: false }) : "");
+const fechaLocal = (iso) => (iso ? `${new Date(iso).toLocaleString("es-EC", { dateStyle: "medium", timeStyle: "medium", hour12: false })} (${ZONA_LOCAL})` : "—");
 const guardarSesion = (k, v) => { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch { /* sin almacenamiento */ } };
 const leerSesion = (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } };
 function descargar(nombre, texto, tipo = "text/csv;charset=utf-8") {
@@ -749,14 +756,15 @@ const OPS = { timer: null, logsVistos: new Set() };
 
 async function refrescarOps() {
   try {
-    const [m, lg, v] = await Promise.all([
+    // /ops/* no se registra en el log: el sondeo del panel no ensucia los logs ni las métricas.
+    const [m, lg] = await Promise.all([
       api("GET", "/ops/metricas", undefined, { silencioso: true }),
-      api("GET", "/ops/logs?n=40", undefined, { silencioso: true }),
-      api("GET", "/version", undefined, { silencioso: true })]);
+      api("GET", "/ops/logs?n=80", undefined, { silencioso: true })]);
+    const v = S.version || {};
     pintarKpisOps(m, v); dibujarTrafico(m.serie); pintarEndpoints(m.por_endpoint); pintarLogs(lg.logs);
-    $("#hs-uptime").textContent = duracion(v.uptime_s);
-    if (v.memoria_mb != null) $("#hs-mem").textContent = `${fmt(v.memoria_mb, 0)} MB${v.limite_memoria_mb ? ` / ${v.limite_memoria_mb}` : ""}`;
-    $("#pl-live").textContent = `activo · ${duracion(v.uptime_s)}`;
+    $("#hs-uptime").textContent = duracion(m.uptime_s);
+    if (m.memoria_mb != null) $("#hs-mem").textContent = `${fmt(m.memoria_mb, 0)} MB${v.limite_memoria_mb ? ` / ${v.limite_memoria_mb}` : ""}`;
+    $("#pl-live").textContent = `activo · ${duracion(m.uptime_s)}`;
   } catch (e) { console.warn("ops", e); }
 }
 function pintarKpisOps(m, v) {
@@ -813,9 +821,10 @@ function pintarEndpoints(lista) {
 }
 function pintarLogs(logs) {
   const term = $("#terminal");
-  term.innerHTML = logs.map((l) => {
+  if ($("#ocultar-health").checked) logs = logs.filter((l) => l.ruta !== "/health");
+  term.innerHTML = logs.slice(0, 40).map((l) => {
     const nivel = l.nivel === "WARNING" ? "warn" : l.nivel === "ERROR" ? "err" : "info";
-    const hora = (l.ts || "").slice(11, 19);
+    const hora = horaLocal(l.ts);
     const { ts, nivel: _n, ...resto } = l;
     const cuerpo = l.evento === "http"
       ? `<span class="t-m">${escapar(l.metodo)}</span> ${escapar(l.ruta)} <span class="t-s t-s${String(l.status)[0]}">${l.status}</span> ${l.ms} ms <span class="t-dim">ip=${escapar(l.ip)} id=${escapar(l.request_id)}</span>`
@@ -828,6 +837,7 @@ function programarOps() {
   if ($("#auto-ops").checked && !$("#tab-nube").hidden) OPS.timer = setInterval(refrescarOps, 5000);
 }
 $("#auto-ops").addEventListener("change", programarOps);
+$("#ocultar-health").addEventListener("change", refrescarOps);
 
 /* --- prueba de latencia --- */
 async function pruebaLatencia() {
@@ -928,10 +938,10 @@ function pintarTablaDeploy() {
     ["Commit · rama", v.commit ? `${v.commit_corto} · ${v.rama || "—"}` : "local (sin commit de Render)"],
     ["Instancia", v.instancia], ["Puerto interno ($PORT)", v.puerto || "—"],
     ["Python · sistema", `${v.python} · ${v.sistema}`], ["Usuario sin root", v.usuario_no_root == null ? "n/a" : v.usuario_no_root ? "sí (appuser)" : "no"],
-    ["Proceso iniciado (UTC)", v.inicio_proceso_utc.replace("T", " ")],
+    ["Proceso iniciado", fechaLocal(v.inicio_proceso_utc)],
     ["Modelo", `${v.modelo.nombre} · umbral ${Math.round(v.modelo.umbral * 100)} % · sklearn ${v.modelo.version_sklearn}`],
     ["Inferencia", v.modelo.inferencia || "—"],
-    ["Entrenado (UTC)", (v.modelo.fecha_entrenamiento || "").replace("T", " ").replace("+00:00", "")],
+    ["Modelo entrenado (docker build)", fechaLocal(v.modelo.fecha_entrenamiento)],
   ];
   $("#tabla-deploy tbody").innerHTML = filas.map(([k, x]) => `<tr><td>${k}</td><td>${escapar(x)}</td></tr>`).join("");
 }
