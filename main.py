@@ -82,7 +82,8 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "ok", "docs": "/docs", "dashboard": "/ui"}
+    return {"status": "ok", "docs": "/docs", "dashboard": "/ui", "version": "1.1"}
+
 
 @app.get("/health")
 def health():
