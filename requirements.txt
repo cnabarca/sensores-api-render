@@ -1,8 +1,12 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-scikit-learn>=1.5.0
-joblib>=1.4.0
-numpy>=1.26.0
-pandas>=2.2.0
-gradio>=5.0.0
-plotly>=5.24.0
+# Dependencias de producción (imagen Docker). Versiones fijadas: el modelo se entrena y se
+# sirve con la MISMA versión de scikit-learn (evita InconsistentVersionWarning al cargar el .pkl).
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+pydantic==2.13.4
+python-multipart==0.0.32
+pandas==2.3.3
+numpy==2.4.6
+scipy==1.16.3
+scikit-learn==1.8.0
+joblib==1.5.3
+evidently==0.7.23

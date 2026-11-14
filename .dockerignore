@@ -1,7 +1,17 @@
-__pycache__
-*.pyc
+# No entra en la imagen: control de versiones, CI, pruebas, artefactos que se regeneran
 .git
+.github
 .gitignore
+tests
+data
+models
+reports
 README.md
+requirements-dev.txt
+**/__pycache__
+*.pyc
 *.ipynb
+.ipynb_checkpoints
 .env
+.venv
+.vscode

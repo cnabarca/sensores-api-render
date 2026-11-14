@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centro de Monitoreo Predictivo · Cloud</title>
+  <meta name="description" content="Monitoreo predictivo de un motor de inducción de 30 kW desplegado en la nube con Docker y Render.">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='3' y='7' width='13' height='10' rx='2' fill='%230f6cbd'/><rect x='16' y='10' width='5' height='4' fill='%230f6cbd'/><path d='M6 7V5h7v2' stroke='%230f6cbd' stroke-width='2' fill='none'/></svg>">
+</head>
+<body>
+  <!-- ======================= BARRA SUPERIOR ======================= -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2.5" y="7" width="13" height="10" rx="2"/><rect x="15.5" y="10" width="5" height="4" rx="1"/>
+        <path d="M5 7V5h8v2M6 17v2M12 17v2" stroke="#fff" stroke-width="1.6" fill="none"/>
+        <path d="M5.5 10h7M5.5 12h7M5.5 14h7" stroke="rgba(255,255,255,.55)" stroke-width="1"/>
+      </svg>
+      <div>
+        <h1>Centro de Monitoreo Predictivo <span class="cloud-badge">Cloud</span></h1>
+        <p class="subtitle">Motor de inducción 30 kW · Bomba centrífuga · ISO 10816-3 · FastAPI + Docker + Render</p>
+      </div>
+    </div>
+    <div class="top-right">
+      <span class="pill pill-model" id="pill-entorno" title="Entorno de ejecución">—</span>
+      <span class="pill pill-model" id="pill-modelo" title="Modelo cargado">—</span>
+      <div id="estado-api" class="pill pill-wait" role="status"><span class="dot"></span><span id="estado-texto">Conectando…</span></div>
+    </div>
+  </header>
+
+  <!-- ======================= FRANJA DE DESPLIEGUE ======================= -->
+  <section class="hero-cloud" aria-label="Estado del despliegue">
+    <div class="hero-inner">
+      <div class="hero-main">
+        <span class="live"><span class="pulse"></span><span id="hero-estado">Conectando con el servicio…</span></span>
+        <div class="hero-url" id="hero-url">—</div>
+      </div>
+      <dl class="hero-stats">
+        <div><dt>Versión</dt><dd id="hs-version">—</dd></div>
+        <div><dt>Commit</dt><dd id="hs-commit">—</dd></div>
+        <div><dt>Activo desde hace</dt><dd id="hs-uptime">—</dd></div>
+        <div><dt>Primera respuesta</dt><dd id="hs-cold">—</dd></div>
+        <div><dt>Memoria</dt><dd id="hs-mem">—</dd></div>
+      </dl>
+    </div>
+    <div class="aviso-frio" id="aviso-frio" hidden role="status"></div>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button class="tab" role="tab" data-tab="lectura" aria-selected="true">
+      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M14 2.2V10h7.8A9 9 0 0 0 14 2.2z" opacity=".5"/></svg>Lectura puntual</button>
+    <button class="tab" role="tab" data-tab="lote" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M3 20h18v-2H3zM5 16h3V9H5zm5.5 0h3V4h-3zM16 16h3v-5h-3z"/></svg>Monitoreo de lote</button>
+    <button class="tab" role="tab" data-tab="simulacion" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9 1.4 1.4L12 18.8l-4-4-3.6 3.6z"/></svg>Simulación 60 días</button>
+    <button class="tab" role="tab" data-tab="integracion" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M7 7h4v2H7v6h4v2H7a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zm6 0h4a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-4v-2h4V9h-4zm-4 4h6v2H9z"/></svg>Integración y seguridad</button>
+    <button class="tab" role="tab" data-tab="nube" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M19.4 10.1A7 7 0 0 0 6.1 8.2 5.5 5.5 0 0 0 6.5 19h12.3a4.5 4.5 0 0 0 .6-8.9z"/></svg>Nube y operación</button>
+    <button class="tab" role="tab" data-tab="equipo" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 5v-2l-2.2-.4a7 7 0 0 0-.8-1.9l1.3-1.8-1.4-1.4-1.8 1.3a7 7 0 0 0-1.9-.8L13.8 3h-2l-.4 2.2a7 7 0 0 0-1.9.8L7.7 4.7 6.3 6.1l1.3 1.8a7 7 0 0 0-.8 1.9L4.6 10.2v2l2.2.4c.2.7.4 1.3.8 1.9l-1.3 1.8 1.4 1.4 1.8-1.3c.6.4 1.2.6 1.9.8l.4 2.2h2l.4-2.2c.7-.2 1.3-.4 1.9-.8l1.8 1.3 1.4-1.4-1.3-1.8c.4-.6.6-1.2.8-1.9z" transform="scale(.92) translate(1 1)"/></svg>Equipo y modelo</button>
+  </nav>
+
+  <main>
+    <!-- =================================================================== -->
+    <!-- 1. LECTURA PUNTUAL                                                   -->
+    <!-- =================================================================== -->
+    <section class="panel" id="tab-lectura" role="tabpanel">
+      <div class="intro">
+        <h2>Evaluación de una lectura de sensores</h2>
+        <p>Mueve los controles para simular la lectura actual del motor. Cada cambio llama a <code>POST /predict</code> en la nube, que combina la <strong>predicción del modelo de ML</strong> con las <strong>zonas de severidad de la norma</strong>.</p>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title"><span class="step">1</span>Lectura de sensores</h3>
+          <div id="sensores"></div>
+          <div class="field">
+            <span class="label">Casos de ejemplo</span>
+            <div class="chips" id="presets-lectura">
+              <button type="button" class="chip" data-p="72,2.0,47">Motor sano</button>
+              <button type="button" class="chip" data-p="84,3.6,50.5">Degradación</button>
+              <button type="button" class="chip" data-p="93,5.8,53.5">Falla mecánica</button>
+              <button type="button" class="chip" data-p="90,2.5,56.5">Sobrecarga eléctrica</button>
+              <button type="button" class="chip chip-warn" id="btn-invalido">Dato inválido (422)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title"><span class="step">2</span>Resultado <span class="latencia-tag" id="lat-lectura"></span></h3>
+          <div id="error-lectura" class="panel-error" hidden role="alert"></div>
+          <div id="resultado-lectura">
+            <div class="gauge-wrap">
+              <svg id="gauge" viewBox="0 -14 220 144" role="img" aria-label="Probabilidad de falla">
+                <path class="g-track" d="M20 115 A90 90 0 0 1 200 115"/>
+                <path id="g-arc" class="g-arc" d="M20 115 A90 90 0 0 1 200 115" pathLength="100" stroke-dasharray="0 100"/>
+                <line id="g-umbral" class="g-umbral" x1="110" y1="18" x2="110" y2="36"/>
+              </svg>
+              <div class="gauge-center"><div id="prob" class="hero">--</div><div class="hero-label" id="hero-label">probabilidad de falla</div></div>
+            </div>
+            <div class="dual">
+              <div class="dual-item" id="dual-modelo"><span class="mini">Modelo de ML</span><strong>—</strong><span class="det">—</span></div>
+              <div class="dual-item" id="dual-norma"><span class="mini">Norma (peor zona)</span><strong>—</strong><span class="det">—</span></div>
+            </div>
+            <div class="recomendacion" id="recomendacion">—</div>
+            <table class="tabla-simple" id="tabla-variables">
+              <thead><tr><th>Variable</th><th>Valor</th><th>Zona</th><th>Acción</th></tr></thead><tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- 2. MONITOREO DE LOTE                                                 -->
+    <!-- =================================================================== -->
+    <section class="panel" id="tab-lote" role="tabpanel" hidden>
+      <div class="intro">
+        <h2>Monitoreo de drift sobre un lote de lecturas</h2>
+        <p>Se simula un lote (por ejemplo, un turno) y se compara con la <strong>línea base sana</strong> del motor mediante cuatro capas: drift estadístico (prueba K-S), límites k·σ, zonas normativas y modelo de ML. Es la evolución de la regla ±2σ de la guía, ahora con tres variables. El reporte visual de <strong>Evidently</strong> se genera bajo demanda para no penalizar la latencia en una instancia de 0,1 CPU.</p>
+      </div>
+      <div class="grid-lote">
+        <div class="card">
+          <h3 class="card-title"><span class="step">1</span>Escenario</h3>
+          <div class="escenarios" id="escenarios"></div>
+          <details class="avanzado">
+            <summary>Parámetros del lote</summary>
+            <div class="param-grid" id="param-grid"></div>
+            <div class="param-row">
+              <label>Tamaño del lote <input type="number" id="p-size" min="50" max="5000" value="200"></label>
+              <label>k (límite k·σ) <input type="number" id="p-k" min="0.5" max="4" step="0.1" value="2"></label>
+            </div>
+            <label class="check"><input type="checkbox" id="p-aleatorio"> Nueva muestra aleatoria en cada ejecución</label>
+            <label class="check"><input type="checkbox" id="p-evidently"> Calcular el drift con Evidently en la misma petición (más lento en el plan Free)</label>
+          </details>
+          <button type="button" class="btn" id="btn-monitor">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Ejecutar monitoreo</button>
+        </div>
+
+        <div class="card resultado-lote">
+          <h3 class="card-title"><span class="step">2</span>Nivel de alerta <span class="latencia-tag" id="lat-lote"></span></h3>
+          <div class="vacio" id="lote-vacio">Elige un escenario y pulsa <strong>Ejecutar monitoreo</strong>.</div>
+          <div id="lote-res" hidden>
+            <div class="escalera" id="escalera"></div>
+            <div class="banner" id="banner"><div class="b-nivel" id="b-nivel"></div><div class="b-accion" id="b-accion"></div></div>
+            <div class="diag"><span class="mini">Diagnóstico</span><p id="diag"></p></div>
+            <div class="kpis" id="kpis"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="detalle-lote" hidden>
+        <h3 class="card-title"><span class="step">3</span>Detalle por variable</h3>
+        <p class="hint">Cada barra muestra las zonas de la norma. <span class="lg lg-ref"></span> media de la línea base · <span class="lg lg-lim"></span> límite k·σ · <span class="lg lg-cur"></span> media del lote actual.</p>
+        <div class="var-cards" id="var-cards"></div>
+        <div class="acciones">
+          <a class="btn-sec" href="/report" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.4l-9.3 9.3-1.4-1.4L17.6 5H14zM5 5h6v2H7v10h10v-4h2v6H5z"/></svg>Abrir reporte completo de Evidently</a>
+          <button type="button" class="btn-sec" id="btn-iframe">Ver reporte aquí</button>
+        </div>
+        <p class="hint small mt-s">El reporte de Evidently se construye al abrirlo. Tras un arranque en frío, la primera vez puede tardar cerca de un minuto (carga de la librería en 0,1 CPU); después, unos segundos.</p>
+        <iframe id="iframe-report" title="Reporte de Evidently" hidden></iframe>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- 3. SIMULACIÓN 60 DÍAS                                                -->
+    <!-- =================================================================== -->
+    <section class="panel" id="tab-simulacion" role="tabpanel" hidden>
+      <div class="intro">
+        <h2>Simulación de degradación hasta la falla</h2>
+        <p>Un rodamiento empieza a desgastarse el <strong>día <span class="cfg-inicio">20</span></strong> y falla el <strong>día <span class="cfg-falla">56</span></strong>. Cada día el panel consulta <code>GET /trayectoria/{dia}</code> y la API evalúa las 144 lecturas del motor (una cada 10 minutos). Observa cuántos días de anticipación ofrece cada capa del sistema.</p>
+      </div>
+      <div class="card">
+        <div class="sim-bar">
+          <button type="button" class="btn" id="btn-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>Reproducir</span></button>
+          <button type="button" class="btn-sec" id="btn-reset">Reiniciar</button>
+          <div class="progreso"><div id="prog-barra"></div></div>
+          <div class="sim-dia">Día <strong id="sim-dia">–</strong> / 59</div>
+        </div>
+        <div class="sim-grid">
+          <div>
+            <div class="chart-titulo">Nivel de alerta diario</div>
+            <div class="chart-box" id="ch-niveles"></div>
+            <div class="chart-titulo">Media diaria de cada sensor sobre las zonas de la norma</div>
+            <div class="mini-charts">
+              <div class="chart-box" id="ch-temperatura"></div>
+              <div class="chart-box" id="ch-vibracion"></div>
+              <div class="chart-box" id="ch-corriente"></div>
+            </div>
+          </div>
+          <aside class="sim-lateral">
+            <div class="estado-dia" id="estado-dia">
+              <span class="mini">Estado del día</span>
+              <div class="ed-nivel" id="ed-nivel">—</div>
+              <div class="ed-diag" id="ed-diag">Pulsa Reproducir para iniciar.</div>
+              <div class="ed-salud"><span>Desgaste h(t)</span><div class="barra-h"><div id="ed-h"></div></div></div>
+            </div>
+            <span class="mini">Hitos de detección</span>
+            <ol class="hitos" id="hitos"></ol>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- 4. INTEGRACIÓN Y SEGURIDAD                                           -->
+    <!-- =================================================================== -->
+    <section class="panel" id="tab-integracion" role="tabpanel" hidden>
+      <div class="intro">
+        <h2>Integración con sistemas externos y seguridad básica</h2>
+        <p>Una planta real no mueve controles deslizantes: exporta lecturas desde el SCADA y las envía a la API. Los endpoints de integración están <strong>protegidos con una API key</strong> que vive como secreto en Render (variable de entorno), nunca en el código.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title"><span class="step">1</span>Credencial de acceso</h3>
+          <p class="hint">Escribe la clave configurada en <code>API_KEY</code>. Se guarda solo en esta pestaña del navegador (sessionStorage) y viaja en la cabecera <code>X-API-Key</code> por HTTPS.</p>
+          <div class="key-row">
+            <input type="password" id="api-key" placeholder="API key" autocomplete="off" aria-label="API key">
+            <button type="button" class="btn-sec" id="btn-ver-key" aria-label="Mostrar u ocultar clave">Mostrar</button>
+            <button type="button" class="btn-sec" id="btn-probar-key">Probar acceso</button>
+          </div>
+          <div class="key-estado" id="key-estado"></div>
+          <h3 class="card-title mt">Pruebas de seguridad en vivo</h3>
+          <div class="demo-seg" id="demo-seg">
+            <button type="button" class="demo" data-demo="sin-clave"><b>Sin credencial</b><span>GET /historial sin X-API-Key</span><i>esperado 401</i></button>
+            <button type="button" class="demo" data-demo="invalido"><b>Dato inválido</b><span>vibración = −1 mm/s</span><i>esperado 422</i></button>
+            <button type="button" class="demo" data-demo="csv-malo"><b>CSV sin columnas</b><span>archivo sin «corriente»</span><i>esperado 422 / 401</i></button>
+            <button type="button" class="demo" data-demo="cabeceras"><b>Cabeceras HTTP</b><span>CSP, nosniff, HSTS…</span><i>inspección</i></button>
+          </div>
+          <pre class="demo-salida" id="demo-salida">Pulsa una prueba para ver la respuesta real del servidor.</pre>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title"><span class="step">2</span>Postura de seguridad del despliegue</h3>
+          <ul class="checklist" id="checklist"></ul>
+          <p class="hint small">Cada punto se verifica en vivo contra el servicio (<code>/ops/seguridad</code> y las cabeceras de la respuesta).</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title"><span class="step">3</span>Predicción por lotes desde un archivo CSV <span class="latencia-tag" id="lat-csv"></span></h3>
+        <div class="grid-csv">
+          <div>
+            <label class="dropzone" id="dropzone" for="archivo-csv">
+              <svg viewBox="0 0 24 24"><path d="M12 3l5 5h-3v6h-4V8H7zm-7 14h14v2H5z"/></svg>
+              <strong>Arrastra un CSV aquí</strong>
+              <span>o haz clic para elegirlo · columnas: temperatura, vibracion, corriente · separador «,» o «;»</span>
+              <span class="archivo-nombre" id="archivo-nombre"></span>
+            </label>
+            <input type="file" id="archivo-csv" accept=".csv,text/csv" hidden>
+            <div class="acciones">
+              <button type="button" class="btn-sec" id="btn-ejemplo-csv">
+                <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5zM12 4v9.2l3.6-3.6L17 11l-5 5-5-5 1.4-1.4 3.6 3.6V4z"/></svg>CSV de ejemplo (un turno)</button>
+              <button type="button" class="btn" id="btn-enviar-csv" disabled>
+                <svg viewBox="0 0 24 24"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg>Enviar a la API</button>
+            </div>
+          </div>
+          <div id="csv-resumen" class="vacio">Los resultados del lote aparecerán aquí.</div>
+        </div>
+        <div id="csv-detalle" hidden>
+          <div id="csv-invalidas"></div>
+          <div class="tabla-wrap tabla-alta"><table class="tabla-simple" id="tabla-csv"></table></div>
+          <div class="acciones"><button type="button" class="btn-sec" id="btn-descargar-res">
+            <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5zM12 4v9.2l3.6-3.6L17 11l-5 5-5-5 1.4-1.4 3.6 3.6V4z"/></svg>Descargar resultados (CSV)</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title"><span class="step">4</span>Consumir la API desde un cliente externo</h3>
+        <p class="hint">Fragmentos listos para copiar, con la URL de este despliegue.</p>
+        <div class="code-tabs" role="tablist">
+          <button type="button" class="code-tab" data-lang="curl" aria-selected="true">curl</button>
+          <button type="button" class="code-tab" data-lang="python" aria-selected="false">Python</button>
+          <button type="button" class="code-tab" data-lang="js" aria-selected="false">JavaScript</button>
+          <button type="button" class="btn-sec btn-copiar" id="btn-copiar">Copiar</button>
+        </div>
+        <pre class="codigo" id="codigo"></pre>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- 5. NUBE Y OPERACIÓN                                                  -->
+    <!-- =================================================================== -->
+    <section class="panel" id="tab-nube" role="tabpanel" hidden>
+      <div class="intro">
+        <h2>Despliegue en la nube y operación del servicio</h2>
+        <p>Del <code>git push</code> a producción: el código pasa por pruebas automáticas, Render construye la imagen Docker (incluido el entrenamiento del modelo) y publica el contenedor detrás de HTTPS. Esta vista muestra el flujo y la salud del servicio en tiempo real.</p>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Flujo CI/CD y arquitectura</h3>
+        <ol class="pipeline" id="pipeline">
+          <li class="etapa"><svg class="e-ico" viewBox="0 0 24 24"><path d="M4 5h16v11H4zm-2 13h20v2H2zM9.5 8.5 7 11l2.5 2.5 1-1L9 11l1.5-1.5zm5 0-1 1L15 11l-1.5 1.5 1 1L17 11z"/></svg><b>Código</b><span>VS Code · Git</span><em>commit + push</em></li>
+          <li class="etapa"><svg class="e-ico" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><b>GitHub</b><span id="pl-repo">repositorio</span><em id="pl-commit">—</em></li>
+          <li class="etapa"><svg class="e-ico" viewBox="0 0 24 24"><path d="M9 2h6v2h-1v5.2l5.6 9.7A2 2 0 0 1 17.9 22H6.1a2 2 0 0 1-1.7-3.1L10 9.2V4H9zm3 9.3L8.6 17h6.8z"/></svg><b>GitHub Actions</b><span>pytest + docker build</span><em id="pl-ci">—</em></li>
+          <li class="etapa"><svg class="e-ico" viewBox="0 0 24 24"><path d="M3 11h3v3H3zm4 0h3v3H7zm4 0h3v3h-3zm-4-4h3v3H7zm4 0h3v3h-3zm4 4h3v3h-3zm-4-8h3v3h-3zM22 12.5c-.6-.4-1.9-.5-2.9-.3-.1-1-.7-1.9-1.6-2.6l-.3-.2-.2.3c-.4.6-.6 1.5-.5 2.3 0 .3.1.7.3 1-.5.3-1.4.4-1.6.4H2.1l-.1.6c-.1 1.4.2 2.8.8 4 1.3 2.1 3.6 3 6.5 3 5.6 0 9.8-2.6 11.8-8.1.8 0 2.4 0 3.2-1.5l.2-.4z"/></svg><b>Render build</b><span>Dockerfile · train_model.py</span><em>imagen inmutable</em></li>
+          <li class="etapa etapa-live"><svg class="e-ico" viewBox="0 0 24 24"><path d="M19.4 10.1A7 7 0 0 0 6.1 8.2 5.5 5.5 0 0 0 6.5 19h12.3a4.5 4.5 0 0 0 .6-8.9z"/></svg><b>Contenedor</b><span>uvicorn · FastAPI · RF · Evidently</span><em id="pl-live">—</em></li>
+          <li class="etapa"><svg class="e-ico" viewBox="0 0 24 24"><path d="M2 21V9l6 4V9l6 4V3h3l1 10h2l2 8z"/></svg><b>Clientes</b><span>Panel · SCADA · scripts</span><em>HTTPS / JSON</em></li>
+        </ol>
+      </div>
+
+      <div class="kpis kpis-6" id="ops-kpis"></div>
+
+      <div class="grid-ops">
+        <div class="card">
+          <h3 class="card-title">Tráfico y latencia (últimos 5 min) <label class="check inline"><input type="checkbox" id="auto-ops" checked> actualizar cada 5 s</label></h3>
+          <div class="chart-box" id="ch-trafico"></div>
+          <p class="hint small"><span class="lg lg-bar"></span> peticiones por ventana de 10 s · <span class="lg lg-line"></span> latencia p95 en el servidor (ms)</p>
+          <div class="tabla-wrap"><table class="tabla-simple" id="tabla-endpoints"></table></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Prueba de latencia desde tu navegador</h3>
+          <p class="hint">Envía peticiones reales a la nube y separa el tiempo de <strong>red</strong> (ida y vuelta hasta Oregon) del tiempo de <strong>cómputo en el servidor</strong> (cabecera <code>X-Response-Time-ms</code>).</p>
+          <div class="param-row">
+            <label>Endpoint <select id="lt-endpoint"><option value="predict">POST /predict</option><option value="health">GET /health</option></select></label>
+            <label>Peticiones <select id="lt-n"><option>10</option><option selected>25</option><option>50</option></select></label>
+          </div>
+          <button type="button" class="btn mt-s" id="btn-latencia"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Ejecutar prueba</button>
+          <div id="lt-res" hidden>
+            <div class="chart-box" id="ch-latencia"></div>
+            <div class="stats" id="lt-stats"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title">Historial de versiones (GitHub)</h3>
+          <div id="gh-commits" class="gh-lista"><p class="hint">Consultando la API pública de GitHub…</p></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Despliegue actual</h3>
+          <table class="tabla-simple" id="tabla-deploy"><tbody></tbody></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Logs estructurados en vivo <span class="mini mini-inline">JSON por petición · IP anonimizada · los mismos que muestra Render en «Logs»</span></h3>
+        <div class="terminal" id="terminal" aria-live="off"></div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- 6. EQUIPO Y MODELO                                                   -->
+    <!-- =================================================================== -->
+    <section class="panel" id="tab-equipo" role="tabpanel" hidden>
+      <div class="intro">
+        <h2>Equipo monitoreado y ficha del modelo</h2>
+        <p>Información técnica que sustenta las decisiones del sistema. El modelo se reentrena dentro del <code>docker build</code>, con la misma versión de scikit-learn que lo sirve.</p>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title">Ficha técnica</h3>
+          <table class="tabla-simple" id="tabla-equipo"><tbody></tbody></table>
+          <h3 class="card-title mt">Zonas de severidad</h3>
+          <div class="tabla-wrap"><table class="tabla-simple tabla-zonas" id="tabla-zonas"></table></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Ficha del modelo</h3>
+          <div class="stats" id="stats-modelo"></div>
+          <h3 class="card-title mt">Comparación en validación cruzada</h3>
+          <div class="tabla-wrap"><table class="tabla-simple" id="tabla-cv"></table></div>
+          <p class="hint small" id="modelo-meta"></p>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="card-title">Niveles de alerta del sistema</h3>
+        <div class="niveles-leyenda" id="niveles-leyenda"></div>
+      </div>
+    </section>
+
+    <!-- ======================= DETALLE TÉCNICO ======================= -->
+    <section class="card tecnico">
+      <details>
+        <summary>Detalle técnico: última petición a la API</summary>
+        <div class="req">
+          <div><span class="method" id="req-method">—</span> <code id="req-url">—</code> <span id="req-status" class="status"></span> <span id="req-time" class="mini mini-inline"></span> <span id="req-id" class="mini mini-inline"></span></div>
+          <div class="req-cols">
+            <div><span class="mini">Enviado</span><pre id="req-body">…</pre></div>
+            <div><span class="mini">Recibido</span><pre id="res-body">…</pre></div>
+          </div>
+        </div>
+      </details>
+      <p class="hint small enlaces">API: <a href="/docs" target="_blank" rel="noopener">/docs</a> · <a href="/health" target="_blank" rel="noopener">/health</a> · <a href="/version" target="_blank" rel="noopener">/version</a> · <a href="/metrics" target="_blank" rel="noopener">/metrics</a> · <a href="/equipo" target="_blank" rel="noopener">/equipo</a> · <a href="/modelo" target="_blank" rel="noopener">/modelo</a> · <a href="/report" target="_blank" rel="noopener">/report</a></p>
+    </section>
+  </main>
+
+  <footer class="pie">Maestría en Inteligencia Artificial · Despliegue de Modelos de IA en la Nube · Semana 3 — Despliegue del modelo en la nube con Docker y Render</footer>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

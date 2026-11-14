@@ -1,56 +1,52 @@
-# Dockerfile – API ML Sensores (Producción)
+# Dockerfile – API de monitoreo predictivo (Semana 3 · producción en Render)
 
 FROM python:3.11-slim
 
 # ── Variables de entorno ──────────────────────────────────────
-# DEBIAN_FRONTEND  → evita prompts interactivos en apt
-# PYTHONUNBUFFERED → los print() aparecen en logs en tiempo real
+# PYTHONUNBUFFERED → los logs JSON aparecen en Render en tiempo real
 # PIP_NO_CACHE_DIR → no guarda caché de pip (imagen más liviana)
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# ── Dependencias del sistema ──────────────────────────────────
-# build-essential y git son necesarios para compilar ciertas librerías de Python (numpy wheels, etc.)
-# Al final limpiamos la caché de apt para no dejar basura con rm -rf.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        build-essential \
-        git && \
-    rm -rf /var/lib/apt/lists/* 
+# Nota: a diferencia de la guía, no se instalan build-essential ni git. Todas las
+# dependencias tienen wheels precompilados para Linux, así la imagen pesa menos y
+# expone menos superficie de ataque.
 
 # ── Usuario no-root (seguridad) ───────────────────────────────
-# Nunca ejecutar la app como root en producción.
-# Creamos un usuario "appuser" con su propio home.
 RUN useradd -m -d /home/appuser -s /bin/bash appuser
 
-# ── Directorio de trabajo ─────────────────────────────────────
 WORKDIR /app
 
-# ── Instalar dependencias Python ──────────────────────────────
-# Copiamos requirements.txt primero para aprovechar la caché de capas de Docker: si las dependencias no cambian, esta
-# capa no se reconstruye aunque cambie el código fuente.
+# ── Dependencias Python (capa cacheada) ───────────────────────
+# Se copian antes que el código: si requirements.txt no cambia, Docker reutiliza esta capa.
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Crear carpetas de cache─────────────────────────────────
-RUN mkdir -p /app/data /app/reports /app/models && \
-    chown -R appuser:appuser /app
+# ── Carpetas de runtime ───────────────────────────────────────
+RUN mkdir -p /app/data /app/reports /app/models && chown -R appuser:appuser /app
 
-# ── Copiar código fuente ──────────────────────────────────────
-# Usamos --chown para que los archivos pertenezcan a appuser
+# ── Código fuente ─────────────────────────────────────────────
 COPY --chown=appuser:appuser . /app
 
-# ── Pre-entrenar modelo durante el build ──────────────────────
-# Ejecutamos train_model.py para que el .pkl ya esté dentro de la imagen. Así el contenedor arranca sin esperas ni
-#posibles timeouts al descargar/generar artefactos.
+# ── Entrenar el modelo durante el build ───────────────────────
+# El .pkl queda dentro de la imagen: el contenedor arranca listo y la versión de
+# scikit-learn que entrena es la misma que sirve.
 USER appuser
 RUN python train_model.py
 
-# ── Puerto de Render ─────────────────────────────
+# ── Puerto dinámico de Render ─────────────────────────────────
 ENV PORT=10000
 EXPOSE $PORT
 
-# ── Comando de arranque ───────────────────────────────────────
-CMD uvicorn main:app --host 0.0.0.0 --port $PORT
+# Chequeo de salud para Docker local (Render usa su propio Health Check Path: /health)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s \
+  CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\",\"10000\")}/health')" || exit 1
+
+# ── Arranque (formato shell para resolver $PORT) ──────────────
+# --proxy-headers: toma la IP real del cliente desde X-Forwarded-For (proxy de Render),
+#                  necesaria para el límite de peticiones por IP.
+# --no-access-log: el middleware ya escribe un log JSON por petición.
+CMD uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --no-access-log

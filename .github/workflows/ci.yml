@@ -1,0 +1,47 @@
+# Integración continua: cada push a main (y cada pull request) ejecuta las pruebas y
+# construye la imagen Docker. En Render se puede activar «Auto-Deploy: After CI Checks Pass»
+# para que solo se despliegue un commit con este workflow en verde.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pruebas:
+    name: Pruebas de la API (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+      - name: Entrenar el modelo
+        run: python train_model.py
+      - name: Ejecutar pruebas
+        run: python -m pytest -q
+
+  docker:
+    name: Build y smoke test del contenedor
+    needs: pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen
+        run: docker build -t sensores-api .
+      - name: Levantar el contenedor con los límites del plan Free (512 MB)
+        run: docker run -d --name api -m 512m -p 8000:10000 sensores-api
+      - name: Esperar /health y probar /predict
+        run: |
+          for i in $(seq 1 40); do curl -sf http://localhost:8000/health && break; sleep 2; done
+          curl -sf -X POST "http://localhost:8000/predict?temperatura=93&vibracion=5.8&corriente=54" | tee /dev/stderr | grep -q '"prediccion":1'
+          curl -sf -X POST "http://localhost:8000/monitor?size=200&t_mean=92&v_mean=5.6&c_mean=54" | grep -q '"nivel_alerta":"DETENER"'
+          docker stats --no-stream api
+      - name: Logs del contenedor
+        if: always()
+        run: docker logs api | tail -n 20

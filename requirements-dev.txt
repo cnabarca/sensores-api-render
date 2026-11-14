@@ -1,0 +1,5 @@
+# Desarrollo y CI: dependencias de producción + pruebas + cliente HTTP de test_api.py
+-r requirements.txt
+pytest>=8.3
+httpx==0.28.1
+requests==2.34.2
